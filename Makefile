@@ -1,69 +1,99 @@
 # ==============================================================================
-# Makefile 使用说明 (Usage):
+# Makefile 增强版 - 支持单服务操作
 # ------------------------------------------------------------------------------
-# 1. 快速检查代码: 运行 `make check`。如果你改了代码但不确定是否写错，先用这个。
-# 2. 首次启动:     运行 `make up`。它会自动下载镜像、编译代码并启动。
-# 3. 查看日志:     运行 `make logs`。实时观察 A 和 B 服务的交互情况。
-# 4. 水平扩容:     运行 `make scale n=3`。将 Service B (风控) 扩展到 3 个副本。
-# 5. 彻底重来:     运行 `make restart`。当你想清理所有缓存重新开始时使用。
-# 6. 进入 Nacos:   运行 `make nacos`。在 Mac 浏览器里一键打开管理页面。
+# 使用说明 (Usage):
+# 
+# 1. 全局操作:
+#    make up              - 启动所有服务 (构建并后台运行)
+#    make down            - 停止并移除所有服务、网络
+#    make logs            - 查看所有服务实时日志
+#
+# 2. 单服务操作 (通过 s 变量指定，可选值: service_a, service_b, nacos):
+#    make check s=service_a    - 只检查服务 A 的代码语法
+#    make build s=service_b    - 只重新构建服务 B 的镜像
+#    make up s=service_b    - 只启动服务 B
+#    make stop s=service_b     - 只停止服务 B
+#    make restart s=service_a  - 只重启服务 A
+#    make logs s=service_b     - 只看服务 B 的日志
+#
+# 3. 其他工具:
+#    make scale n=3       - 扩容服务 B 到 3 个副本
+#    make nacos           - 浏览器打开 Nacos 后台
 # ==============================================================================
 
-# 默认参数
-n ?= 3
+# 默认变量
+s ?=                   # 默认服务名为空（代表全部）
+n ?= 2                 # 默认扩容副本数为 2
 
-.PHONY: help check up down restart logs ps scale nacos
+.PHONY: help check build up start stop restart down logs ps scale nacos
 
-# 默认执行 help
+# 默认帮助命令
 help:
-	@echo "可用命令:"
-	@echo "  make check     - ⚡️ [最快] 仅本地编译代码，检测语法错误"
-	@echo "  make up        - 🚀 构建镜像并在后台启动所有服务"
-	@echo "  make down      - 🛑 停止并移除所有服务"
-	@echo "  make restart   - 🔄 彻底停止并重新构建启动"
-	@echo "  make logs      - 📝 实时跟踪查看所有服务的日志"
-	@echo "  make ps        - 🔍 查看容器运行状态"
-	@echo "  make scale n=3 - 📈 扩容 Service B (n 为目标副本数)"
-	@echo "  make nacos     - 🌐 在浏览器打开 Nacos 后台"
+	@echo "可用命令示例:"
+	@echo "  make check s=service_a    - 仅本地编译检查服务 A"
+	@echo "  make up                   - 启动所有服务"
+	@echo "  make up s=service_b       - 仅启动/更新服务 B"
+	@echo "  make stop s=service_a     - 仅停止服务 A"
+	@echo "  make restart s=service_b  - 仅重启服务 B"
+	@echo "  make logs s=service_a     - 仅查看服务 A 日志"
+	@echo "  make down                 - 停止并清理整个内网"
 
-# 1. 快速编译检查 (检查代码是否有错，不涉及 Docker)
+# 1. 代码编译检查 (本地执行)
 check:
-	@echo ">>> 正在检查代码编译状态..."
-	@go build -o /dev/null ./service_a/main.go && echo ">>> Service A [OK]"
-	@go build -o /dev/null ./service_b/main.go && echo ">>> Service B [OK]"
-	@echo ">>> ✅ 代码语法检测通过，可以放心部署。"
+	@if [ "$(s)" = "" ]; then \
+		echo ">>> 正在检查所有服务代码..."; \
+		go build -o /dev/null ./service_a/main.go && echo ">>> Service A [OK]"; \
+		go build -o /dev/null ./service_b/main.go && echo ">>> Service B [OK]"; \
+	else \
+		echo ">>> 正在检查 $(s) 代码..."; \
+		go build -o /dev/null ./$(s)/main.go && echo ">>> $(s) [OK]"; \
+	fi
 
-# 2. 启动服务 (后台运行)
+# 2. 编译镜像 (不运行)
+build:
+	@echo ">>> 正在构建镜像 $(s)..."
+	docker-compose build $(s)
+
+# 3. 启动服务 (后台运行)
 up:
-	@echo ">>> 正在构建并启动服务..."
-	docker-compose up -d --build
+	@echo ">>> 正在启动服务 $(s)..."
+	docker-compose up -d --build $(s)
 
-# 3. 停止服务
-down:
-	@echo ">>> 正在停止并清理容器..."
-	docker-compose down
+# 4. 停止特定服务容器 (不移除网络)
+stop:
+	@echo ">>> 正在停止服务 $(s)..."
+	docker-compose stop $(s)
 
-# 4. 彻底重启
+# 5. 单独重启特定服务
+# 原理: 先停止容器，再重新启动
 restart:
-	@echo ">>> 正在执行彻底重置..."
+	@if [ "$(s)" = "" ]; then \
+		echo ">>> 正在重启所有服务..."; \
+		docker-compose restart; \
+	else \
+		echo ">>> 正在重启服务 $(s)..."; \
+		docker-compose restart $(s); \
+	fi
+
+# 6. 停用并清理整个环境 (慎用)
+down:
+	@echo ">>> 正在停止并清理整个内网环境..."
 	docker-compose down
-	docker-compose up -d --build
 
-# 5. 查看实时日志
+# 7. 查看日志
 logs:
-	@echo ">>> 正在实时追踪日志 (Ctrl+C 退出)..."
-	docker-compose logs -f
+	@echo ">>> 正在查看 $(s) 日志 (Ctrl+C 退出)..."
+	docker-compose logs -f $(s)
 
-# 6. 查看容器状态
+# 8. 查看状态
 ps:
 	docker-compose ps
 
-# 7. 水平扩容
+# 9. 水平扩容 Service B
 scale:
 	@echo ">>> 正在将 Service B 扩容到 $(n) 个实例..."
 	docker-compose up -d --scale service_b=$(n)
 
-# 8. 快速打开 Nacos 管理界面 (Mac 专用)
+# 10. 浏览器打开 Nacos
 nacos:
-	@echo ">>> 正在打开 Nacos 控制台..."
 	@open http://localhost:8848/nacos
