@@ -5,22 +5,19 @@ services:
     environment:
       - MODE=standalone
       - NACOS_AUTH_ENABLE=false
+      - NACOS_AUTH_IDENTITY_KEY=nacos
+      - NACOS_AUTH_IDENTITY_VALUE=nacos
     ports:
-      - "8848:8848"
+      - "8848:8848" # http://localhost:8848/nacos
       - "9848:9848"
     networks:
       - micro-net
 
   service_b:
     build:
-      context: .
-      dockerfile_inline: |
-        FROM golang:1.22-alpine
-        WORKDIR /app
-        COPY . .
-        RUN go build -o main ./service_b/main.go
-        CMD ["./main"]
-    # container_name: service_b # 注释这一行，service_b才能被scale(因为每个container必须有唯一的name)
+      context: . # 关键：上下文在根目录
+      dockerfile: service_b/Dockerfile # 指定 B 的 Dockerfile
+    # container_name 删掉，方便以后执行 make scale
     depends_on:
       - nacos
     networks:
@@ -28,14 +25,8 @@ services:
 
   service_a:
     build:
-      context: .
-      dockerfile_inline: |
-        FROM golang:1.22-alpine
-        WORKDIR /app
-        COPY . .
-        RUN go build -o main ./service_a/main.go
-        CMD ["./main"]
-    container_name: service_a
+      context: . # 关键：上下文在根目录
+      dockerfile: service_a/Dockerfile # 指定 A 的 Dockerfile
     depends_on:
       - service_b
     networks:
