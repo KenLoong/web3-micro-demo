@@ -1,0 +1,46 @@
+services:
+  nacos:
+    image: nacos/nacos-server:v2.3.1-slim
+    container_name: nacos
+    environment:
+      - MODE=standalone
+      - NACOS_AUTH_ENABLE=false
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+    networks:
+      - micro-net
+
+  service_b:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM golang:1.22-alpine
+        WORKDIR /app
+        COPY . .
+        RUN go build -o main ./service_b/main.go
+        CMD ["./main"]
+    # container_name: service_b # 注释这一行，service_b才能被scale(因为每个container必须有唯一的name)
+    depends_on:
+      - nacos
+    networks:
+      - micro-net
+
+  service_a:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM golang:1.22-alpine
+        WORKDIR /app
+        COPY . .
+        RUN go build -o main ./service_a/main.go
+        CMD ["./main"]
+    container_name: service_a
+    depends_on:
+      - service_b
+    networks:
+      - micro-net
+
+networks:
+  micro-net:
+    driver: bridge

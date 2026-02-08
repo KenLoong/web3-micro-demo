@@ -1,0 +1,15 @@
+syntax = "proto3";
+package pb;
+option go_package = "./pb";
+
+service RiskService {
+  rpc CheckAddress (RiskRequest) returns (RiskResponse);
+}
+
+message RiskRequest {
+  string address = 1;
+}
+
+message RiskResponse {
+  bool is_safe = 1;
+}
